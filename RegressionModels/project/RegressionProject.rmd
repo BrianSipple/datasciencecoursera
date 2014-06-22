@@ -1,0 +1,202 @@
+Manual or Automatic: Which is best for MPG?
+========================================================
+
+## Summary
+
+This project attempts to answer two important questions about automobile usage:
+
+  1. Is an automatic or manual transmission better for MPG?
+  2. How can we quantify the "difference" in MPG between automatic and manual transmissions?
+  
+To do this use the methodolgies of Regression Models and Exploratory Data Analysis to explore how transmission type (our predictor variable) impacts MPG (our outcome variable). We'll also pretend that it's the year 1974 and use the mtcars dataset in R, which describes itself as follows:
+
+"The data was extracted from the 1974 Motor Trend US magazine, and comprises fuel consumption and 10 aspects of automobile design and performance for 32 automobiles (1973–74 models)."
+
+
+---
+
+## The Data
+
+As a built-in dataset within R's datasets package, loading the mtcars dataset is straightforward:
+
+```{r}
+
+library(datasets)
+data(mtcars)
+
+```
+
+Our variables of interset will be mtcars[,1] (mpg) and mtcars[,9] (Transmission). 
+
+mpg is measured in miles per (US)gallon, and transmission is reported as 0 for automatic and 1 for manual
+
+```{r}
+names(mtcars)
+
+```
+
+### Exploratory Analysis
+
+Right away we can leverage the binary nature of the transmission variable by turning it into a factor. 
+```{r}
+class(mtcars$am)
+
+mtcars$am[mtcars$am == 0] <- "automatic"
+mtcars$am[mtcars$am == 1] <- "manual"
+
+mtcars$am = as.factor(mtcars$am)
+```
+
+As an initial exploratory plot will then show, there appears to be a distinctly higher level of MPG among manual-transmission vehicles than among automatic vehicles (See: Figure 1, Appendix)
+
+### Question 1: Is an automatic or manual transmission better for MPG?
+
+Approach: Hypothesis Test
+
+A basic way to answer this question is by performing a hypothesis test.  
+
+The Null hypothesis ($H_0$) is that transmission type has no bearing on MPG (assuming the means are from the same distribution). The Alternative Hypothesis ($H_1$) is that there is a significant difference in the means between each group.
+
+Since we'll be grouping the already-small 32-value dataset into auto/manual groups, a non-paried t-test will be our weapon of choice:
+
+```{r}
+mpgAuto <- mtcars$mpg[mtcars$am == "automatic"]
+mpgManual <- mtcars$mpg[mtcars$am == "manual"]
+
+comparison = t.test(x = mpgAuto, y=mpgManual, paired=F)
+
+comparison$p.value
+comparison$conf_int[1]
+
+```
+
+### Answer 1
+
+The output speaks for itself. We get a p-value of `r comparison$p.value` and a confidence interval for the difference in means of (`comparison$conf.int[1]`, `comparison$conf.int[2]`). This means that there's a highly significant difference in the average MPG between automatic/manual tranmission vehicles. 
+
+The mean MPG estimate for our x in the test (automatic) is `r comparison$estimate[1]` MPG; the mean MPG estimate for our y in the test (manual) is `r comparison$estimate[2]`. Therefore, we can confidently state that in 1974 manual-transmission vehicles produced better MPG results... and that 9 out of 10 doctors remcommended Camels. 
+
+### Question 2: How can we quantify the "difference" in MPG between automatic and manual transmissions?
+
+Approach: Linear models
+
+Step 1 for reinforcing our hypothesis test is to fit a simple linear model on the same two components: tranmission as a predictor of MPG. Doing so provides the same inference about manual's MPG dominance:
+
+```{r}
+
+fit1 = lm(mpg ~ am, data=mtcars)
+fit1$coef
+
+```
+
+The intercept represents the expected MPG when tranmission equals first level of its the factor ("automatic"). In other words, in the mathematical notation of y = beta0 + x1*beta1, x1 is 0.
+
+the slope, "ammanual", represents the increase in expected MPG when transmission equals its second factor ("manual"). Mathematically, this would be y = beta0 + x1*beta1, where beta0 is the same inctercept, beta1 is the slope, and now x1 is 1.
+
+### Diving deeper
+
+Of course, it's always better to make multiple models that "factor in" other factors and test for confounding variables. For example, we can add weight to the model as a confounder, and see how our results change when there's no interaction between weight and the transmisssion type:
+
+```{r}
+
+fit2 = lm(mpg ~ wt + am, data=mtcars)
+
+```
+
+Witness, the new coefficients:
+
+```{r}
+
+fit2$coef
+
+```
+
+So yeah... as it turns out, weight has a massively higher impact on the mpg of a vechicle than transmission type. Every one unit change in weight will shift MPG by 5.35, compared to a 1-unit change in transmission type shifting it by .02 (when both are factored into the model as so)
+
+We can investigate this effect further by fitting a model that includes interaction between the two variables:
+
+```{r}
+
+fit3 = lm(mpg ~ wt + am + (wt * am), data=mtcars)
+
+```
+The results:
+
+```{r}
+fit3$coef
+
+```
+
+Ha! The interaction model appears to be far more accurate. We still get a formidable weight effect, but this time the transmission type's impact is strongly represented as well (`r fit3$coef[3]`, again, represents the difference in MPG between the "automatic" and "manual" level)
+
+
+### Diagnostics
+
+Having fit our different models, we can now plot residuals for each as a diagnostic tool (See: Figure 2, Appendix). The best fit, not suprisingly, is given by our final interaction model
+
+### Analaysis of variance
+
+Finally, as a concrete means of determining that the interaction model is the most effective -- and, you know, actually meaningful -- we perform an analysis of variance test:
+
+```{r}
+
+varCompare <- anova(fit1, fit2, fit3)
+varCompare
+
+names(varCompare)
+```
+
+We now have a p-value of `r varCompare$Pr[2]` for the model without interaction, and a p-value of `r varCompare$Pr[3]` for the model with interaction. (Both are represented in comparison to the simple model). 
+
+This allows us to conclude that the interaction between weight and transmission type is legit. And since we've already shown that it fits the best model for us out of all three, it would behoove us to include it. 
+
+## Conclusions
+
+A confounder has been found! Our optimal model can be interpretted as saying that given a certain transmission type, the expected MPG for a vehicle still depends on the weight.
+
+More quantitatively, Expected MPG for a manual vehicle = `r fit3$coef[1]` + `r fit3$coef[2]` + `r fit3$coef[3]` + (`r fit3$coef[4]` * weight) 
+
+This line is visualized below (Figure 3, Appendix), and we can see that for lighter cars, manual transmissions do indeed yield the best MPG, while for heavier cars, a better MPG value is attained with an automatic transmission
+
+## Appendix
+
+```{r}
+boxplot(mtcars$mpg ~ mtcars$am, col=c("steelblue", "green"), plot=T)
+```
+Figure 1: Plotting the data... a rough cut
+
+```{r, echo=FALSE, fig.height=5, fig.width=5}
+
+par(mfrow = c(3, 4))
+plot(fit1)
+plot(fit2)
+plot(fit3)
+```
+Figure 2: Residual Plots
+
+        - Row 1: First model, only the transmission type as a predictor.
+        - Row 2: Second model, transmission type + weight as predictors (but no interaction).
+        - Row 3: Third model, transmission type + weight + (transmission type * weight) as predictors, the latter being the interaction.
+        
+```{r}
+par(mfrow = c(1, 1))
+plot(mtcars$wt, fit3$coef[2] + (mtcars$wt * fit3$coef[4]))
+
+```
+
+Figure 3: Dependence of transmission type on the weight variable
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

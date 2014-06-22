@@ -97,7 +97,7 @@ library(randomForest)
 for (i in 1:length(folds)) {
         print(i)
         model = randomForest(classe~., data=training[folds[[i]], -1])
-        pred[-folds[[i]]] = predict(model, train[-folds[[i]], -1])
+        pred[-folds[[i]]] = predict(model, training[-folds[[i]], -1])
 }
 
 
@@ -138,56 +138,7 @@ pml_write_files = function(x) {
 mu-2*sdev
 mu+2*sdev
 
-
-
-
-```
-
-We've now managed to cut the number of features in our dataset from 160 to 93 -- just by elminating columns where NA values were generated for more than half of the observations. We can make the set even cleaner, however, by removing all non-numeric columns (execpt for the "classe" outcome!)
-
-```{r}
-
-trainVec = numeric()
-
-for (i in 1:92) {
-        if (class(trainingData[,i]) == "numeric") {
-                trainVec = rbind(trainVec, i)
-        }
-}
-
-# toss the outcome column back in
-trainVec = rbind(trainVec, 93)
-
-# convert the training set once again
-trainingData = trainingData[, trainVec]
-
-dim(trainingData)
-
-```
-
-
-Furthermore, the sheer size of the training data (19622 observations!) should afford us the ability to partion the dataset and employ cross-validation testing. We can also speed up the model training by reducing the number of observations outright -- I choose to only use 3000 
-
-As such, we'll subdivide the training set further using a 70-30 partition. "training" (70 percent) will be used for our PCA. "crossVal" will be used for cross-validation testing -- before the algorithm is run against the final test set of 20 example observations (held in "testData").
-
-```{r}
-set.seed(300)
-library(caret)
-
-# Reduce the number of observations. Using sample, we ensure that the vector indexes an even distribution of the levels in our "classe" factor
-
-inTrain = sample(nrow(trainingData), 3000)
-trainingData = trainingData[inTrain,]
-
-# Now partition further to create a cross-validation set
-inTrain = sample(nrow(trainingData), nrow(trainingData) * .7)
-  
-training = trainingData[inTrain,]
-crossVal = trainingData[-inTrain,]
-
-# Verify dimensions
-dim(training); dim(crossVal)
-
+pml_write_files(answers)
 ```
 
 ## Model Fitting
