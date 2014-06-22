@@ -1,0 +1,259 @@
+Training Machine Learning Predictions on Fitness-Tracking Sensor Data
+
+=================================================================================
+
+# Background
+
+Using devices such as Jawbone Up, Nike FuelBand (RIP Nike FuelBand), and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These types of devices are part of the "quantified self" movement (which in turn points to the larger emerging trend of wearable computing as a means of integrating technology with the flow of the world). 
+
+One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how WELL they do it. The goal of this analysis, therefore, is to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants and predict the manner in which an exercise was performed. 
+
+The participants were asked to perform one set of 10 repetitions of the Unilateral Dumbbell Biceps Curl in five different fashions: exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E).
+
+The qualitative value of each exercise instance is stored in the traning set's "classe" variable.
+
+More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset). 
+
+
+# Data
+
+The training data for this project are available here: 
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here: 
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+The data for this project come from this source: http://groupware.les.inf.puc-rio.br/har.
+
+# Loading the data
+
+```{r}
+
+# After settting working directory.... 
+
+if (!file.exists("./data")) {
+  dir.create("./data")
+}
+
+trainUrl = 'https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv'
+testUrl = 'https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv'
+
+download.file(trainUrl, destfile="./data/training.csv", method="curl")
+download.file(testUrl, destfile="./data/testing.csv", method="curl")
+
+training = read.csv(file="./data/training.csv", header=T, na.strings=c("NA", " "))
+testing = read.csv(file="./data/testing.csv", header=T, na.strings=c("NA", " "))
+
+```
+
+## Pre-processing
+
+Sound pre-processing often starts with removing NAs and setting the variables in the dataset to their appropriate classes -- so they can be computed on in the appropriate way.
+
+First, we can manually remove a few variables that are obviously useless -- i.e., "X", "user_name", and "raw_timestamp" -- then we can get more clever.
+
+```{r}
+
+# remove some fluff
+
+training = training[,-c(1, 2, 3, 4, 5)]
+testing = testing[, -c(1, 2, 3, 4, 5)]
+
+# turn classes of variables into their appropiate class by reasoning with their unique counts
+countElem = apply(training, 2, function(x) { length(unique(x)) })
+
+for (i in 1:(ncol(training)-1)) {
+        if (countElem[i] > 10) { 
+                training[,i] = as.numeric(training[,i]) 
+                testing[,i] = as.numeric(testing[,i]) 
+        }
+}
+
+# Remove variables that are all NAs in the test data set:
+countNA = data.frame(training = apply(training, 2, function(x) { sum(is.na(x))}),
+                     testing = apply(testing, 2, function(x) { sum(is.na(x))}) )
+
+NAs = which(countNA$training != 0) 
+NAs.test=which(countNA$testing != 0)
+
+out = union(NAs, NAs.test)
+
+training = training[,-out]
+testing = testing[,-out]
+
+
+# Split the data for k-folds cross-validation
+set.seed(1)
+library(caret)
+folds = createFolds(y=training$classe, k=10, list=T, returnTrain = T)
+pred = factor(rep("A", nrow(training)), levels=levels(training$classe))
+
+
+# Use predictive algorithm random forest to train model and predict outcome for the k-folds
+
+library(randomForest)
+for (i in 1:length(folds)) {
+        print(i)
+        model = randomForest(classe~., data=training[folds[[i]], -1])
+        pred[-folds[[i]]] = predict(model, train[-folds[[i]], -1])
+}
+
+
+# estimate misclassification error on the data set
+
+missClass = sum(pred != training$classe) / nrow(training) * 100
+missClass
+
+# compute the mean and standard deviate of each misclassification error of the k-fold
+missClassFold = c()
+for (i in 1:length(folds)) {
+        missClassFold = c(missClassFold, 
+                          sum(pred[-folds[[i]]] != training$classe[-folds[[i]]]) /nrow(training) - length(folds[[i]])) * 100 )
+}
+
+mu = mean(missClassFold)
+sdev = sd(missClassFold)
+
+
+# We can form a 95% Confidence interval for the missclassification error
+CI = [mu-2*sdev, mu+2*sdev]
+
+#classify the test data:
+testing$new_window = factor(testing$new_window, levels = c('no', 'yes'))
+
+model = randomForest(class~. data = training[,-1])
+answers = predict(model, testing[,-c(ncol(test))])
+
+# write down answers
+pml_write_files = function(x) {
+        n = length(x)
+        for (i in 1:n) {
+                filename = paste0("problem_id_", i, ".txt")
+                write.table(x[i], file=filename, quote=F, row.names=F, col.names=F)
+        }
+}
+
+mu-2*sdev
+mu+2*sdev
+
+
+
+
+```
+
+We've now managed to cut the number of features in our dataset from 160 to 93 -- just by elminating columns where NA values were generated for more than half of the observations. We can make the set even cleaner, however, by removing all non-numeric columns (execpt for the "classe" outcome!)
+
+```{r}
+
+trainVec = numeric()
+
+for (i in 1:92) {
+        if (class(trainingData[,i]) == "numeric") {
+                trainVec = rbind(trainVec, i)
+        }
+}
+
+# toss the outcome column back in
+trainVec = rbind(trainVec, 93)
+
+# convert the training set once again
+trainingData = trainingData[, trainVec]
+
+dim(trainingData)
+
+```
+
+
+Furthermore, the sheer size of the training data (19622 observations!) should afford us the ability to partion the dataset and employ cross-validation testing. We can also speed up the model training by reducing the number of observations outright -- I choose to only use 3000 
+
+As such, we'll subdivide the training set further using a 70-30 partition. "training" (70 percent) will be used for our PCA. "crossVal" will be used for cross-validation testing -- before the algorithm is run against the final test set of 20 example observations (held in "testData").
+
+```{r}
+set.seed(300)
+library(caret)
+
+# Reduce the number of observations. Using sample, we ensure that the vector indexes an even distribution of the levels in our "classe" factor
+
+inTrain = sample(nrow(trainingData), 3000)
+trainingData = trainingData[inTrain,]
+
+# Now partition further to create a cross-validation set
+inTrain = sample(nrow(trainingData), nrow(trainingData) * .7)
+  
+training = trainingData[inTrain,]
+crossVal = trainingData[-inTrain,]
+
+# Verify dimensions
+dim(training); dim(crossVal)
+
+```
+
+## Model Fitting
+
+And now to fit our model. Given the extent to which we've already cleaned up our dataset, we should be able to take advantage of the the random forest classifier.
+
+In addition to their high level of accuracy, random forests are perfect for data, considering the outcome variable was categorical and had 5 different levels - A, B, C, D and E. Random forests are an ensemble learning method for classification that operate by constructing a multitude of decision trees at training time and outputting the class that is the mode of the classes output by individual trees.
+
+```{r}
+
+
+set.seed(1324)
+
+modFit = train(classe~., method="rf", prox=T, data=training)
+
+modFit
+
+
+```
+
+The accuracy that our model was able to obtain was 92.5%. Pretty good. Now that we have it fit, though, we need to use it to predict on our cross-validation set.
+
+```{r}
+
+crossValPredicts <- predict(modFit, crossVal[,-28])
+crossValPredicts
+
+```
+For good measure, let's run it on the testing set as well
+
+```{r}
+
+testingPredicts = predict(modFit, testingData$classe)
+
+```
+
+
+## Model Evaluation
+
+Evaluating the accuracy of the model is performed by applying the predcitions we made on the cross-validation set to a confusion matrix -- along with the actual "classe" values of said set
+
+```{r}
+
+# Evaluate Cross-Validation predictions
+CVresults = confusionMatrix(crossVal$classe, crossValPredicts)
+CVresults
+
+# Evaluate predictions on the test set
+testResults = confusionMatrix(testingData$classe, testingPredicts)
+```
+
+
+
+  
+
+
+
+
+
+
+In this case -- alluding to the M.A. Hall Correlation-based Feature Subset Selection for Machine Learning, Department of CS, New Zealand, 1999 -- the designers of the test suggested that 
+a key indicator metric in the data set might be 
+
+
+
+
+
+
+

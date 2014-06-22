@@ -1,0 +1,181 @@
+# Loading the data
+
+```{r}
+
+# After settting working directory.... 
+
+if (!file.exists("./data")) {
+        dir.create("./data")
+}
+
+trainUrl = 'https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv'
+testUrl = 'https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv'
+
+download.file(trainUrl, destfile="./data/training.csv", method="curl")
+download.file(testUrl, destfile="./data/testing.csv", method="curl")
+
+trainingData = read.csv(file="./data/training.csv", header=T, na.strings=c("NA", " "))
+testingData = read.csv(file="./data/testing.csv", header=T, na.strings=c("NA", " "))
+
+```
+
+## Training a prediction model
+
+Sound pre-processing often means feature extraction. We'll conduct a Principal Components
+Analysis on the data set to do accomplish just that, but first it's apparent that we need to get rid of the columns that include NAs or missing values (belt-sensors and weight lifting, as it turns out, might not be the best combination for good data).
+
+I also manually removed a few useless variables, such as X, user_name, and raw_timestamp
+
+```{r}
+
+
+trainVec = numeric()
+
+for (i in 1:ncol(trainingData)) {
+        if ( sum(is.na(trainingData[,i]) ) <= (length(trainingData[,i]) / 2) ) {
+                trainVec = rbind(trainVec, i)
+        }
+}
+
+trainingData = trainingData[, trainVec]
+
+```
+
+We've now managed to cut the number of features in our dataset from 160 to 93 -- just by elminating columns where NA values were generated for more than half of the observations. We can make the set even cleaner, however, by removing all non-numeric columns (execpt for the "classe" outcome!)
+
+```{r}
+
+trainVec = numeric()
+
+for (i in 1:92) {
+if (class(trainingData[,i]) == "numeric") {
+trainVec = rbind(trainVec, i)
+}
+}
+
+# toss the outcome column back in
+trainVec = rbind(trainVec, 93)
+
+# convert the training set once again
+trainingData = trainingData[, trainVec]
+
+dim(trainingData)
+
+```
+
+
+Furthermore, the sheer size of the training data (19622 observations!) should afford us the ability to partion the dataset and employ cross-validation testing. We can also speed up the model training by reducing the number of observations outright -- I choose to only use 3000 
+
+As such, we'll subdivide the training set further using a 70-30 partition. "training" (70 percent) will be used for our PCA. "crossVal" will be used for cross-validation testing -- before the algorithm is run against the final test set of 20 example observations (held in "testData").
+
+```{r}
+set.seed(300)
+library(caret)
+
+# Reduce the number of observations. Using sample, we ensure that the vector indexes an even distribution of the levels in our "classe" factor
+
+inTrain = sample(nrow(trainingData), 3000)
+trainingData = trainingData[inTrain,]
+
+# Now partition further to create a cross-validation set
+inTrain = sample(nrow(trainingData), nrow(trainingData) * .7)
+
+training = trainingData[inTrain,]
+crossVal = trainingData[-inTrain,]
+
+# Verify dimensions
+dim(training); dim(crossVal)
+
+```
+
+which(colnames(training) == "classe")  # 28th column is what we want to predict
+
+
+M <- abs(cor(training[,-28]))
+
+# Since every variable has a correlation of 1 with itself, we set those correlations to 0 so they're not detected
+diag(M) = 0
+
+# Now find the variables with a high correlation to each other
+# From the results we get, the correlations are shown were the row of 
+# one variable aligns witht the column of another... and vice-versa.
+which(M > 0.8, arr.ind=T)
+
+
+```
+
+The correlations higher than 0.8 are as follows:
+        
+        row col
+
+gyros_arm_y       11  10
+gyros_arm_x       10  11
+
+
+We can plot the values for these variables to better visualize the relationships and evaluate their use.
+
+```{r}
+
+
+names(training)[c(11, 10)]    # "gyros_arm_y" vs "gyros_arm_x"     
+p1 <- plot(training[,11], training[,10], xlab="gyros_arm_y", ylab="gyros_arm_x")
+p1
+
+
+```
+
+
+If we spot a set of variables that are highly linearly correlated, it might be an indicator that both aren't necessary for our training. We might instead want to meld them into one super-variable, in a way that still retains most of the variance from each. 
+
+Our array of plots immediately shows us two suspects: "gyros_arm_x" and "gyros_arm_y". 
+
+The idea is to give them a WEIGHTED combination, which we can determine through a few tests:
+
+```{r}
+
+X = (.5 * training$gyros_arm_x) + (.5 * training$gyros_arm_y)
+Y = (.5 * training$gyros_arm_x) - (.5 * training$gyros_arm_y)
+
+plot(X, Y, col = rgb(0, 0, 0, .1))  # Hmm... no real difference in the variance based on this manipulation
+
+
+X = (.5 * training$gyros_arm_x) * (.5 * training$gyros_arm_y)
+Y = (.5 * training$gyros_arm_x) / (.5 * training$gyros_arm_y)
+
+plot(X, Y, col=rgb(0, 0, 0, .1) )  
+
+# That's a little better -- more variance seems to lie along the x - axis, so it's that transformation... (.5 * training$gyros_arm_x) * (.5 * training$gyros_arm_y) ... that we want to use for forming our super-variable, because it captures the most variance.
+
+
+```
+
+So that's the intuition... R handles this in a highly optimized way via the prcomp function, which takes a similar approach but with as many variables as we choose to give it.
+
+With that in mind, let's use prcomp to list out the principle components for our training set -- taking all columns except for "classe" into account. 
+
+```{r}
+
+analysis = prcomp(training[,-28], scale=T) 
+analysis
+```
+
+#27 principle components are found. Each one is a melding of the 27 variables in our
+# training set, ordered by the amount of varaince that they are effective at capturing.
+
+```{r}
+
+names(analysis)
+
+analysis$rotation
+analysis$x
+analysis$sdev  # This is what we're after
+
+
+variance_vector = analysis$sdev ^ 2
+variance_vector
+
+normalized_var = variance_vector / sum(variance_vector)
+
+# How much we variance is captured -- and by how many variables -- can be answered now 
+
+cumsum(normalized_var)
