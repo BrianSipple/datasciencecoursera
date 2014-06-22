@@ -116,7 +116,15 @@ total_health_plot = ggplot(data= plot_df1, aes(y=health_damage, x=event_type)) +
                 ggtitle("Total Storm-Event Health Damage")
 
 
+df = data.frame(newColumn=numeric())
 
+values = numeric()
+
+for (i in 1:nrow(frame)) {
+        if ( storm_us51[i, n] == NA) {
+                
+        }
+}
 
 plot_df2 = data.frame(event_type = names(head(avg_harm_by_event, 15)), 
                      health_damage = head(avg_harm_by_event, 15) )
