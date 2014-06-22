@@ -83,7 +83,15 @@ out = union(NAs, NAs.test)
 training = training[,-out]
 testing = testing[,-out]
 
+```
 
+## Model Fitting
+
+And now to fit our model. Given the extent to which we've already cleaned up our dataset, we should be able to take advantage of the the random forest classifier.
+
+In addition to their high level of accuracy, random forests are perfect for data, considering the outcome variable was categorical and had 5 different levels - A, B, C, D and E. Random forests are an ensemble learning method for classification that operate by constructing a multitude of decision trees at training time and outputting the class that is the mode of the classes output by individual trees.
+
+```{r}
 # Split the data for k-folds cross-validation
 set.seed(1)
 library(caret)
@@ -101,6 +109,11 @@ for (i in 1:length(folds)) {
 }
 
 
+```
+
+
+## Evaluation
+```{r}
 # estimate misclassification error on the data set
 
 missClass = sum(pred != training$classe) / nrow(training) * 100
@@ -141,66 +154,7 @@ mu+2*sdev
 pml_write_files(answers)
 ```
 
-## Model Fitting
 
-And now to fit our model. Given the extent to which we've already cleaned up our dataset, we should be able to take advantage of the the random forest classifier.
-
-In addition to their high level of accuracy, random forests are perfect for data, considering the outcome variable was categorical and had 5 different levels - A, B, C, D and E. Random forests are an ensemble learning method for classification that operate by constructing a multitude of decision trees at training time and outputting the class that is the mode of the classes output by individual trees.
-
-```{r}
-
-
-set.seed(1324)
-
-modFit = train(classe~., method="rf", prox=T, data=training)
-
-modFit
-
-
-```
-
-The accuracy that our model was able to obtain was 92.5%. Pretty good. Now that we have it fit, though, we need to use it to predict on our cross-validation set.
-
-```{r}
-
-crossValPredicts <- predict(modFit, crossVal[,-28])
-crossValPredicts
-
-```
-For good measure, let's run it on the testing set as well
-
-```{r}
-
-testingPredicts = predict(modFit, testingData$classe)
-
-```
-
-
-## Model Evaluation
-
-Evaluating the accuracy of the model is performed by applying the predcitions we made on the cross-validation set to a confusion matrix -- along with the actual "classe" values of said set
-
-```{r}
-
-# Evaluate Cross-Validation predictions
-CVresults = confusionMatrix(crossVal$classe, crossValPredicts)
-CVresults
-
-# Evaluate predictions on the test set
-testResults = confusionMatrix(testingData$classe, testingPredicts)
-```
-
-
-
-  
-
-
-
-
-
-
-In this case -- alluding to the M.A. Hall Correlation-based Feature Subset Selection for Machine Learning, Department of CS, New Zealand, 1999 -- the designers of the test suggested that 
-a key indicator metric in the data set might be 
 
 
 
