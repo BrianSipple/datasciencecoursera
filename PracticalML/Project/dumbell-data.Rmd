@@ -110,7 +110,7 @@ missClass
 missClassFold = c()
 for (i in 1:length(folds)) {
         missClassFold = c(missClassFold, 
-                          sum(pred[-folds[[i]]] != training$classe[-folds[[i]]]) /nrow(training) - length(folds[[i]])) * 100 )
+                          sum(pred[-folds[[i]]] != training$classe[-folds[[i]]]) /nrow(training) - length(folds[[i]]) * 100 )
 }
 
 mu = mean(missClassFold)
@@ -124,7 +124,7 @@ CI = [mu-2*sdev, mu+2*sdev]
 testing$new_window = factor(testing$new_window, levels = c('no', 'yes'))
 
 model = randomForest(class~. data = training[,-1])
-answers = predict(model, testing[,-c(ncol(test))])
+answers = predict(model, testing[,-c(ncol(testing))])
 
 # write down answers
 pml_write_files = function(x) {
