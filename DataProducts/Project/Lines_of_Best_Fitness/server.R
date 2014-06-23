@@ -15,7 +15,7 @@ shinyServer(function(input, output) {
                "Other" <- input$other)
   })
 
-  labels = c("Endurance", "Intense Aerobics", "Heavy Weight", "Med Weight", "Flex", "Other")
+  labels = c("Endurance", "Intense Aerobics", "Heavy Weight", "Med Weight", "Yoga", "Other")
   
   
   output$plot = renderPlot({
