@@ -1,0 +1,10 @@
+---
+title: "Workout Breakdown"
+author: "Brian Sipple"
+date: "June 23, 2014"
+output: html_document
+---
+
+### User Instructions
+
+This app provides a user interface for dynamically logggin and plotting weekly workout minutes. The user can enter the number of minutes they spent exercising during the week as they apply to each category, and instantly see both a barplot (tab 1) and a table (tab 2) that visaulize/summarize the data. 
